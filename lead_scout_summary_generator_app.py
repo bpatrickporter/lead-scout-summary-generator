@@ -4,6 +4,7 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 import pytz
+import plotly.express as px
 
 def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     url = f"https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}&date={date_str}&formatted=0"
@@ -81,7 +82,7 @@ if csv_file is not None:
     ).reset_index()
 
     # Derived metrics
-    grouped["Time in Field (Raw Hours)"] = (grouped["Finish"] - grouped["Start"]).dt.total_seconds() / 3600
+    grouped["Time in Field (Hours)"] = (grouped["Finish"] - grouped["Start"]).dt.total_seconds() / 3600
     grouped["Time in Field"] = (grouped["Finish"] - grouped["Start"])
     grouped["Time in Field"] = grouped["Time in Field"].apply(
         lambda td: f"{int(td.total_seconds() // 3600)}h {int((td.total_seconds() % 3600) // 60)}m"
@@ -94,7 +95,7 @@ if csv_file is not None:
         grouped["Inspections"] / grouped["Conversations"]
     ).replace([np.inf, -np.inf], np.nan).round(2)
     grouped["DPH"] = (
-        grouped["Total_Pins"] / grouped["Time in Field (Raw Hours)"]
+        grouped["Total_Pins"] / grouped["Time in Field (Hours)"]
         ).replace([np.inf, -np.inf], np.nan).round(2)
     grouped["Closing %"] = (
         grouped["Claims_Filed"] / grouped["Insp_Damage"]
@@ -104,13 +105,16 @@ if csv_file is not None:
     grouped["Sunset Time"] = grouped["Date"].apply(lambda d: get_sunset_time(d.strftime('%Y-%m-%d')))
     grouped["Finish"] = grouped["Finish"].dt.tz_localize(None)
     grouped["Sunset Time"] = grouped["Sunset Time"].dt.tz_localize(None)
-    grouped["Before Sunset"] = grouped.apply(
-        lambda row: (
-            f"{int(diff.total_seconds() // 3600)}h {int((diff.total_seconds() % 3600) // 60)}m"
-            if pd.notnull(row["Sunset Time"]) and pd.notnull(row["Finish"]) and (diff := row["Sunset Time"] - row["Finish"]) > timedelta(0)
-            else "0h 0m"
-        ),
-        axis=1
+    grouped[["Before Sunset", "Before Sunset (Hours)"]] = grouped.apply(
+      lambda row: (
+        [
+            f"{int(diff.total_seconds() // 3600)}h {int((diff.total_seconds() % 3600) // 60)}m",
+            round(diff.total_seconds() / 3600, 2)
+        ] if pd.notnull(row["Sunset Time"]) and pd.notnull(row["Finish"]) and (diff := row["Sunset Time"] - row["Finish"]) > timedelta(0)
+        else ["0h 0m", 0.0]
+      ),
+      axis=1,
+      result_type="expand"
     )
 
     # Placeholder columns
@@ -123,9 +127,9 @@ if csv_file is not None:
     # Merge with grouped data
     grouped = pd.merge(grouped, long_gaps, on=["Lead Status Updated By", "Date"], how="left")
     # Calculate Adjusted Time in Field (raw timedelta)
-    grouped["Adj Time in Field (Raw)"] = (grouped["Finish"] - grouped["Start"]) - pd.to_timedelta(grouped["Total Long Gaps (s)"], unit="s")
+    grouped["Adj Time in Field (Hours)"] = (grouped["Finish"] - grouped["Start"]) - pd.to_timedelta(grouped["Total Long Gaps (s)"], unit="s")
     # Format as hh:mm string
-    grouped["Adj Time in Field"] = grouped["Adj Time in Field (Raw)"].apply(
+    grouped["Adj Time in Field"] = grouped["Adj Time in Field (Hours)"].apply(
         lambda td: f"{int(td.total_seconds() // 3600)}h {int((td.total_seconds() % 3600) // 60)}m"
         if pd.notnull(td) and td > timedelta(0) else "0h 0m"
     )
@@ -139,18 +143,79 @@ if csv_file is not None:
         "Insp_Scheduled": "Inpsections Scheduled",
         "Insp_Damage": "Inspected - Damaged",
         "Insp_No_Damage": "Inspected - No Damage",
-        "Claims_Filed": "Claim Filed"
+        "Claims_Filed": "Claims Filed"
     })[[
         "Lead Status Updated By", "Date", "Start", "Finish", "Time in Field",
         "Adj Time in Field", "Sunset Time", "Before Sunset", 
         "Knocks", "Convos", "Convo %", "Inspections", "Inspected - No Damage", 
-        "Inspected - Damaged", "Claim Filed", "Closing %", "Inspections/Door", 
+        "Inspected - Damaged", "Claims Filed", "Closing %", "Inspections/Door", 
         "Inspections/Convo", "Inspection Time", "DPH", "Field Time Less Inspections", 
         "True AVG Time/Door", "True DPH", "< 30s", "> 5m No Inspection", 
         "Position", "Note"
     ]]
 
     st.write("Your Lead Scout Summary:")
-    st.dataframe(grouped)  # Interactive table view
+    st.dataframe(output)  # Interactive table view
+
+    ## Dashboards
+
+    # Knocks
+    knocks = output.sort_values(by="Knocks", ascending=False)
+    fig = px.bar(knocks, x="Lead Status Updated By", y="Knocks", title="Knocks by Rep")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Time in Field
+    time_in_field = grouped.sort_values(by="Time in Field (Hours)", ascending=False)
+    fig_2 = px.bar(time_in_field, x="Lead Status Updated By", y="Time in Field (Hours)", title="Time in Field by Rep")
+    st.plotly_chart(fig_2, use_container_width=True)
+
+    # Adj Time in Field
+    adj_time_in_field = grouped.sort_values(by="Adj Time in Field (Hours)", ascending=False)
+    fig_3 = px.bar(adj_time_in_field, x="Lead Status Updated By", y="Adj Time in Field (Hours)", title="Adj Time in Field by Rep")
+    st.plotly_chart(fig_3, use_container_width=True)
+
+    # Before Sunset
+    before_sunset = grouped.sort_values(by="Before Sunset (Hours)", ascending=False)
+    fig_4 = px.bar(before_sunset, x="Lead Status Updated By", y="Before Sunset (Hours)", title="Knocks Before Sunset by Rep")
+    st.plotly_chart(fig_4, use_container_width=True)
+
+    # Convos
+    convos = output.sort_values(by="Convos", ascending=False)
+    fig_5 = px.bar(convos, x="Lead Status Updated By", y="Convos", title="Convos by Rep")
+    st.plotly_chart(fig_5, use_container_width=True)
+
+    # Convo %
+    convo_perc = output.sort_values(by="Convo %", ascending=False)
+    fig_6 = px.bar(convo_perc, x="Lead Status Updated By", y="Convo %", title="Convo % by Rep")
+    st.plotly_chart(fig_6, use_container_width=True)
+
+    # Inspections
+    inspections = output.sort_values(by="Inspections", ascending=False)
+    fig_7 = px.bar(inspections, x="Lead Status Updated By", y="Inspections", title="Inspections by Rep")
+    st.plotly_chart(fig_7, use_container_width=True)
+
+    # Claims Filed
+    claims = output.sort_values(by="Claims Filed", ascending=False)
+    claims_y_max = claims["Claims Filed"].max()
+    claims_y_range = [0, claims_y_max * 1.1 if claims_y_max > 0 else 5]
+    fig_8 = px.bar(claims, x="Lead Status Updated By", y="Claims Filed", title="Claims Filed by Rep", range_y=claims_y_range)
+    st.plotly_chart(fig_8, use_container_width=True)
+
+    # Closing %
+    closing_perc = output.sort_values(by="Closing %", ascending=False)
+    closing_y_max = closing_perc["Closing %"].max()
+    closing_y_range = [0, claims_y_max * 1.1 if claims_y_max > 0 else 10]
+    fig_9 = px.bar(closing_perc, x="Lead Status Updated By", y="Closing %", title="Closing % by Rep", range_y=closing_y_range)
+    st.plotly_chart(fig_9, use_container_width=True)
+
+    # Inspections/Door
+    inspections_per_door = output.sort_values(by="Inspections/Door", ascending=False)
+    fig_10 = px.bar(inspections_per_door, x="Lead Status Updated By", y="Inspections/Door", title="Inspections/Door by Rep")
+    st.plotly_chart(fig_10, use_container_width=True)
+
+    # Inspections/Convo
+    inspections_per_convo = output.sort_values(by="Inspections/Convo", ascending=False)
+    fig_11 = px.bar(inspections_per_convo, x="Lead Status Updated By", y="Inspections/Convo", title="Inspections/Convo by Rep")
+    st.plotly_chart(fig_11, use_container_width=True)
 else:
     st.info("👆 Upload a CSV file to get started.")

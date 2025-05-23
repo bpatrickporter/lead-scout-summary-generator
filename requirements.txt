@@ -4,3 +4,4 @@ numpy
 requests
 datetime
 pytz
+plotly.express
