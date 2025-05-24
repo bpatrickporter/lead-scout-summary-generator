@@ -14,6 +14,8 @@ def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     eastern = pytz.timezone("America/Indiana/Indianapolis")
     return utc_time.astimezone(eastern)
 
+st.set_page_config(layout="wide")
+
 st.title("📊 Lead Scout Summary Generator")
 
 # Upload or load CSV file
@@ -160,63 +162,26 @@ if csv_file is not None:
 
     ## Dashboards
 
-    # Knocks
-    knocks = output.sort_values(by="Knocks", ascending=False)
-    fig = px.bar(knocks, x="Lead Status Updated By", y="Knocks", title="Knocks by Rep")
-    st.plotly_chart(fig, use_container_width=True)
+    chart_specs = [
+        ("Knocks", "Knocks"),
+        ("Convos", "Convos"),
+        ("Convo %", "Convo %"),
+        ("Inspections", "Inspections"),
+        ("Claims Filed", "Claims Filed"),
+        ("Closing %", "Closing %"),
+        ("Inspections/Door", "Inspections/Door"),
+        ("Inspections/Convo", "Inspections/Convo"),
+    ]
 
-    # Time in Field
-    time_in_field = grouped.sort_values(by="Time in Field (Hours)", ascending=False)
-    fig_2 = px.bar(time_in_field, x="Lead Status Updated By", y="Time in Field (Hours)", title="Time in Field by Rep")
-    st.plotly_chart(fig_2, use_container_width=True)
+    # Pair charts 3 at a time
+    for i in range(0, len(chart_specs), 3):
+        col1, col2, col3 = st.columns(3)
 
-    # Adj Time in Field
-    adj_time_in_field = grouped.sort_values(by="Adj Time in Field (Hours)", ascending=False)
-    fig_3 = px.bar(adj_time_in_field, x="Lead Status Updated By", y="Adj Time in Field (Hours)", title="Adj Time in Field by Rep")
-    st.plotly_chart(fig_3, use_container_width=True)
-
-    # Before Sunset
-    before_sunset = grouped.sort_values(by="Before Sunset (Hours)", ascending=False)
-    fig_4 = px.bar(before_sunset, x="Lead Status Updated By", y="Before Sunset (Hours)", title="Knocks Before Sunset by Rep")
-    st.plotly_chart(fig_4, use_container_width=True)
-
-    # Convos
-    convos = output.sort_values(by="Convos", ascending=False)
-    fig_5 = px.bar(convos, x="Lead Status Updated By", y="Convos", title="Convos by Rep")
-    st.plotly_chart(fig_5, use_container_width=True)
-
-    # Convo %
-    convo_perc = output.sort_values(by="Convo %", ascending=False)
-    fig_6 = px.bar(convo_perc, x="Lead Status Updated By", y="Convo %", title="Convo % by Rep")
-    st.plotly_chart(fig_6, use_container_width=True)
-
-    # Inspections
-    inspections = output.sort_values(by="Inspections", ascending=False)
-    fig_7 = px.bar(inspections, x="Lead Status Updated By", y="Inspections", title="Inspections by Rep")
-    st.plotly_chart(fig_7, use_container_width=True)
-
-    # Claims Filed
-    claims = output.sort_values(by="Claims Filed", ascending=False)
-    claims_y_max = claims["Claims Filed"].max()
-    claims_y_range = [0, claims_y_max * 1.1 if claims_y_max > 0 else 5]
-    fig_8 = px.bar(claims, x="Lead Status Updated By", y="Claims Filed", title="Claims Filed by Rep", range_y=claims_y_range)
-    st.plotly_chart(fig_8, use_container_width=True)
-
-    # Closing %
-    closing_perc = output.sort_values(by="Closing %", ascending=False)
-    closing_y_max = closing_perc["Closing %"].max()
-    closing_y_range = [0, claims_y_max * 1.1 if claims_y_max > 0 else 10]
-    fig_9 = px.bar(closing_perc, x="Lead Status Updated By", y="Closing %", title="Closing % by Rep", range_y=closing_y_range)
-    st.plotly_chart(fig_9, use_container_width=True)
-
-    # Inspections/Door
-    inspections_per_door = output.sort_values(by="Inspections/Door", ascending=False)
-    fig_10 = px.bar(inspections_per_door, x="Lead Status Updated By", y="Inspections/Door", title="Inspections/Door by Rep")
-    st.plotly_chart(fig_10, use_container_width=True)
-
-    # Inspections/Convo
-    inspections_per_convo = output.sort_values(by="Inspections/Convo", ascending=False)
-    fig_11 = px.bar(inspections_per_convo, x="Lead Status Updated By", y="Inspections/Convo", title="Inspections/Convo by Rep")
-    st.plotly_chart(fig_11, use_container_width=True)
+        for j, col in enumerate((col1, col2, col3)):
+            if i + j < len(chart_specs):
+                metric, title = chart_specs[i + j]
+                data = output.sort_values(by=metric, ascending=False)
+                fig = px.bar(data, x="Lead Status Updated By", y=metric, title=title, height=300)
+                col.plotly_chart(fig, use_container_width=True)
 else:
     st.info("👆 Upload a CSV file to get started.")
