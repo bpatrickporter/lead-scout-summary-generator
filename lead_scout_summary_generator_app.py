@@ -189,24 +189,18 @@ def generate_map(df):
         else:
             st.warning(f"⚠️ No mappable addresses found for {selected_rep}.")
 
-@st.cache_data(show_spinner=True)
-def geocode_addresses(ep_name: str, addresses: pd.Series):
+@st.cache_data(show_spinner=False)
+def geocode_single_address(address):
     geolocator = ArcGIS(user_agent="lead-scout-app", timeout=10)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 
-    def safe_geocode(addr):
-        try:
-            location = geocode(addr)
-            if location:
-                return pd.Series([location.latitude, location.longitude])
-        except:
-            pass
-        return pd.Series([None, None])
-
-    # Apply to full Series
-    coords = addresses.apply(safe_geocode)
-    coords.columns = ["Latitude", "Longitude"]
-    return coords
+    try:
+        location = geocode(address)
+        if location:
+            return location.latitude, location.longitude
+    except:
+        pass
+    return None, None
 
 def compute_map_df(df, selected_rep):
     if "Full Address" not in df.columns:
@@ -218,17 +212,30 @@ def compute_map_df(df, selected_rep):
         st.warning("⚠️ No addresses found for selected rep.")
         return pd.DataFrame()
 
-    info_placeholder = st.empty()
     pin_count = len(rep_df)
+    info_placeholder = st.empty()
     info_placeholder.info(
-      f"📍 Geocoding {pin_count} pins for {selected_rep}... ⏳ This may take ~1 second per pin."
+        f"📍 Geocoding {pin_count} pins for {selected_rep}... ⏳ This may take ~1 second per pin."
     )
 
-    coords = geocode_addresses(selected_rep, rep_df["Full Address"])
-    rep_df = rep_df.join(coords)
+    latitudes = []
+    longitudes = []
+    progress = st.progress(0)
 
+    for i, addr in enumerate(rep_df["Full Address"]):
+        lat, lng = geocode_single_address(addr)  # ✅ cache hit if already called
+        latitudes.append(lat)
+        longitudes.append(lng)
+        progress.progress((i + 1) / pin_count)
+
+    progress.empty()
     info_placeholder.empty()
+
+    rep_df["Latitude"] = latitudes
+    rep_df["Longitude"] = longitudes
+
     return rep_df[rep_df["Latitude"].notnull() & rep_df["Longitude"].notnull()]
+
 
 def plot_knock_map(df):
     if "Latitude" in df.columns and "Longitude" in df.columns:
