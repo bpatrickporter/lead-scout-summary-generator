@@ -175,48 +175,57 @@ def generate_dashboards(df):
                 fig = px.bar(data, x="Lead Status Updated By", y=metric, title=title, height=300)
                 col.plotly_chart(fig, use_container_width=True)
 
-def geocode_addresses(addresses):
-    geolocator = ArcGIS(timeout=10)
+def generate_map(df):
+    rep_list = sorted(df["Lead Status Updated By"].dropna().unique().tolist())
+    rep_options = ["-- Select a Rep --"] + rep_list
+    selected_rep = st.selectbox("Select a rep to view map:", rep_options)
+
+    if selected_rep == "-- Select a Rep --":
+        st.info("👆 Please select a rep to view their pins on the map. ⏳ Note: This may take ~1 second per pin as addresses are geocoded in real time.")
+    else:
+        map_df = compute_map_df(df, selected_rep)
+        if not map_df.empty:
+            plot_knock_map(map_df)
+        else:
+            st.warning(f"⚠️ No mappable addresses found for {selected_rep}.")
+
+@st.cache_data(show_spinner=True)
+def geocode_addresses(ep_name: str, addresses: pd.Series):
+    geolocator = ArcGIS(user_agent="lead-scout-app", timeout=10)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 
-    latitudes = []
-    longitudes = []
-
-    progress = st.progress(0)
-
-    for i, addr in enumerate(addresses):
+    def safe_geocode(addr):
         try:
             location = geocode(addr)
             if location:
-                latitudes.append(location.latitude)
-                longitudes.append(location.longitude)
-            else:
-                latitudes.append(None)
-                longitudes.append(None)
+                return pd.Series([location.latitude, location.longitude])
         except:
-            latitudes.append(None)
-            longitudes.append(None)
+            pass
+        return pd.Series([None, None])
 
-        progress.progress((i + 1) / len(addresses))
+    # Apply to full Series
+    coords = addresses.apply(safe_geocode)
+    coords.columns = ["Latitude", "Longitude"]
+    return coords
 
-    progress.empty()
-    return latitudes, longitudes
-
-def compute_map_df(df):
+def compute_map_df(df, selected_rep):
     if "Full Address" not in df.columns:
         st.warning("⚠️ 'Full Address' column not found. Cannot map pins.")
         return pd.DataFrame()
 
+    rep_df = df[df["Lead Status Updated By"] == selected_rep]
+    if rep_df.empty:
+        st.warning("⚠️ No addresses found for selected rep.")
+        return pd.DataFrame()
+
     info_placeholder = st.empty()
-    info_placeholder.info("📍 Geocoding addresses... please wait...")
+    info_placeholder.info(f"📍 Geocoding addresses for {selected_rep}...")
 
-    latitudes, longitudes = geocode_addresses(df["Full Address"])
-    df["Latitude"] = latitudes
-    df["Longitude"] = longitudes
+    coords = geocode_addresses(selected_rep, rep_df["Full Address"])
+    rep_df = rep_df.join(coords)
 
-    info_placeholder.empty()  # ✅ Clear the info message
-
-    return df[df["Latitude"].notnull() & df["Longitude"].notnull()]
+    info_placeholder.empty()
+    return rep_df[rep_df["Latitude"].notnull() & rep_df["Longitude"].notnull()]
 
 def plot_knock_map(df):
     if "Latitude" in df.columns and "Longitude" in df.columns:
@@ -257,8 +266,7 @@ if csv_file is not None:
 
     generate_dashboards(output_df)
 
-    map_df = compute_map_df(df)
-    plot_knock_map(map_df)
+    generate_map(df)
 
 else:
     st.info("👆 Upload a CSV file to get started.")
