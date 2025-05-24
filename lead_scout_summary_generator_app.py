@@ -153,9 +153,10 @@ if csv_file is not None:
         "True AVG Time/Door", "True DPH", "< 30s", "> 5m No Inspection", 
         "Position", "Note"
     ]]
+    output_indexed = output.set_index("Lead Status Updated By")
 
     st.write("Your Lead Scout Summary:")
-    st.dataframe(output)  # Interactive table view
+    st.dataframe(output_indexed)  # Interactive table view
 
     ## Dashboards
 
