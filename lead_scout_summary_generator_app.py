@@ -14,17 +14,7 @@ def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     eastern = pytz.timezone("America/Indiana/Indianapolis")
     return utc_time.astimezone(eastern)
 
-st.set_page_config(layout="wide")
-
-st.title("📊 Lead Scout Summary Generator")
-
-# Upload or load CSV file
-csv_file = st.file_uploader("Upload your scouting report here", type=["csv"])
-
-if csv_file is not None:
-    df = pd.read_csv(csv_file)
-    st.success("✅ File loaded successfully!")
-
+def process_data(df):
     # Ensure correct types and clean values
     df["Lead Status Updated At"] = pd.to_datetime(df["Lead Status Updated At"], errors="coerce")
     df = df[df["Lead Status Updated At"].notnull()].copy()
@@ -67,7 +57,7 @@ if csv_file is not None:
     df["Is Inspected - No Damage"] = (df["Lead Status"] == "Inspected - No Damage").astype(int)
     df["Is Inspected - Damage"] = (df["Lead Status"] == "Inspected - Damage").astype(int)
     df["Is Claim Filed"] = (df["Lead Status"] == "Claim Filed").astype(int)
-
+    
     # Group and aggregate
     grouped = df.groupby(["Lead Status Updated By", "Date"]).agg(
         Start=("Lead Status Updated At", "min"),
@@ -135,9 +125,12 @@ if csv_file is not None:
         lambda td: f"{int(td.total_seconds() // 3600)}h {int((td.total_seconds() % 3600) // 60)}m"
         if pd.notnull(td) and td > timedelta(0) else "0h 0m"
     )
-
+    
+    return grouped
+    
+def prep_for_output(df):
     # Output formatting and export
-    output = grouped.rename(columns={
+    output = df.rename(columns={
         "Total_Pins": "Knocks",
         "Conversations": "Convos",
         "Pins_Lt_30s": "< 30s",
@@ -155,13 +148,9 @@ if csv_file is not None:
         "True AVG Time/Door", "True DPH", "< 30s", "> 5m No Inspection", 
         "Position", "Note"
     ]]
-    output_indexed = output.set_index("Lead Status Updated By")
+    return output
 
-    st.write("Your Lead Scout Summary:")
-    st.dataframe(output_indexed)  # Interactive table view
-
-    ## Dashboards
-
+def generate_dashboards(df):
     chart_specs = [
         ("Knocks", "Knocks"),
         ("Convos", "Convos"),
@@ -180,8 +169,29 @@ if csv_file is not None:
         for j, col in enumerate((col1, col2, col3)):
             if i + j < len(chart_specs):
                 metric, title = chart_specs[i + j]
-                data = output.sort_values(by=metric, ascending=False)
+                data = df.sort_values(by=metric, ascending=False)
                 fig = px.bar(data, x="Lead Status Updated By", y=metric, title=title, height=300)
                 col.plotly_chart(fig, use_container_width=True)
+
+st.set_page_config(layout="wide")
+
+st.title("📊 Lead Scout Summary Generator")
+
+# Upload or load CSV file
+csv_file = st.file_uploader("Upload your scouting report here", type=["csv"])
+
+if csv_file is not None:
+    df = pd.read_csv(csv_file)
+    st.success("✅ File loaded successfully!")
+
+    processed_df = process_data(df)
+    output_df = prep_for_output(processed_df)
+    output_indexed = output_df.set_index("Lead Status Updated By")
+
+    st.write("Your Lead Scout Summary:")
+    st.dataframe(output_indexed)  # Interactive table view
+
+    generate_dashboards(output_df)
+
 else:
     st.info("👆 Upload a CSV file to get started.")
