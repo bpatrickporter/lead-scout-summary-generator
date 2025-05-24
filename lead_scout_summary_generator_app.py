@@ -219,7 +219,7 @@ def compute_map_df(df, selected_rep):
         return pd.DataFrame()
 
     info_placeholder = st.empty()
-    info_placeholder.info(f"📍 Geocoding addresses for {selected_rep}...")
+    info_placeholder.info(f"📍 Geocoding addresses for {selected_rep}... ⏳ This may take ~1 second per pin.")
 
     coords = geocode_addresses(selected_rep, rep_df["Full Address"])
     rep_df = rep_df.join(coords)
