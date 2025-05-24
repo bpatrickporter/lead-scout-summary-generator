@@ -5,3 +5,4 @@ requests
 datetime
 pytz
 plotly.express
+geopy
