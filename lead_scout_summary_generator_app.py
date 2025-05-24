@@ -5,6 +5,8 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import plotly.express as px
+from geopy.geocoders import ArcGIS
+from geopy.extra.rate_limiter import RateLimiter
 
 def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     url = f"https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}&date={date_str}&formatted=0"
@@ -173,6 +175,68 @@ def generate_dashboards(df):
                 fig = px.bar(data, x="Lead Status Updated By", y=metric, title=title, height=300)
                 col.plotly_chart(fig, use_container_width=True)
 
+def geocode_addresses(addresses):
+    geolocator = ArcGIS(timeout=10)
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+
+    latitudes = []
+    longitudes = []
+
+    progress = st.progress(0)
+
+    for i, addr in enumerate(addresses):
+        try:
+            location = geocode(addr)
+            if location:
+                latitudes.append(location.latitude)
+                longitudes.append(location.longitude)
+            else:
+                latitudes.append(None)
+                longitudes.append(None)
+        except:
+            latitudes.append(None)
+            longitudes.append(None)
+
+        progress.progress((i + 1) / len(addresses))
+
+    progress.empty()
+    return latitudes, longitudes
+
+def compute_map_df(df):
+    if "Full Address" not in df.columns:
+        st.warning("⚠️ 'Full Address' column not found. Cannot map pins.")
+        return pd.DataFrame()
+
+    info_placeholder = st.empty()
+    info_placeholder.info("📍 Geocoding addresses... please wait...")
+
+    latitudes, longitudes = geocode_addresses(df["Full Address"])
+    df["Latitude"] = latitudes
+    df["Longitude"] = longitudes
+
+    info_placeholder.empty()  # ✅ Clear the info message
+
+    return df[df["Latitude"].notnull() & df["Longitude"].notnull()]
+
+def plot_knock_map(df):
+    if "Latitude" in df.columns and "Longitude" in df.columns:
+        st.subheader("🗺️ Knock Map by Rep")
+        map_fig = px.scatter_mapbox(
+            df,
+            lat="Latitude",
+            lon="Longitude",
+            color="Lead Status Updated By",
+            hover_name="Lead Status Updated By",
+            hover_data=["Lead Status", "Lead Status Updated At"],
+            zoom=11,
+            height=600
+        )
+        map_fig.update_layout(mapbox_style="open-street-map")
+        map_fig.update_traces(marker=dict(size=8))
+        st.plotly_chart(map_fig, use_container_width=True)
+    else:
+        st.warning("📍 Latitude and Longitude not found in uploaded file.")
+
 st.set_page_config(layout="wide")
 
 st.title("📊 Lead Scout Summary Generator")
@@ -192,6 +256,9 @@ if csv_file is not None:
     st.dataframe(output_indexed)  # Interactive table view
 
     generate_dashboards(output_df)
+
+    map_df = compute_map_df(df)
+    plot_knock_map(map_df)
 
 else:
     st.info("👆 Upload a CSV file to get started.")
