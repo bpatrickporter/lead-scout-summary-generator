@@ -16,6 +16,17 @@ def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     eastern = pytz.timezone("America/Indiana/Indianapolis")
     return utc_time.astimezone(eastern)
 
+def classify_gap(row):
+    gap = row["Time Since Last Pin (s)"]
+    is_inspection = row["Is Inspection"]
+    if pd.isnull(gap):
+        return 0
+    if gap > 7200:  # > 120 mins
+        return gap
+    elif gap > 1800 and not is_inspection:  # > 30 mins & not inspection
+        return gap
+    return 0
+
 def process_data(df):
     # Ensure correct types and clean values
     df["Lead Status Updated At"] = pd.to_datetime(df["Lead Status Updated At"], errors="coerce")
@@ -32,11 +43,9 @@ def process_data(df):
     df["Time Since Last Pin"] = df["Lead Status Updated At"] - df["Previous Time"]
     # Create helper column: time gaps in seconds
     df["Time Since Last Pin (s)"] = df["Time Since Last Pin"].dt.total_seconds()
-    # Filter to only gaps > 20 minutes (1200 seconds)
-    df["Long Gaps"] = df["Time Since Last Pin (s)"].where(df["Time Since Last Pin (s)"] > 1800, 0)
-    # Sum long gaps per rep + date
-    long_gaps = df.groupby(["Lead Status Updated By", "Date"])["Long Gaps"].sum().reset_index()
-    long_gaps.rename(columns={"Long Gaps": "Total Long Gaps (s)"}, inplace=True)
+    df["Long Gaps (s)"] = df.apply(classify_gap, axis=1)
+    long_gaps = df.groupby(["Lead Status Updated By", "Date"])["Long Gaps (s)"].sum().reset_index()
+    long_gaps.rename(columns={"Long Gaps (s)": "Total Long Gaps (s)"}, inplace=True)
 
     # Classification
     df["Is Conversation"] = df.apply(lambda row: int(
