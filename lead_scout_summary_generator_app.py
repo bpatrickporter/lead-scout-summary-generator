@@ -237,6 +237,8 @@ def generate_dashboards(df):
         ("Closing %", "Closing %"),
         ("Inspections/Door", "Inspections/Door"),
         ("Inspections/Convo", "Inspections/Convo"),
+        ("True AVG Time/Door", "True AVG Time/Door"),
+        ("True DPH", "True DPH"),
     ]
 
     # Pair charts 3 at a time
