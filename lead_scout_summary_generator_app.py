@@ -195,6 +195,14 @@ def process_data(df):
         if pd.notnull(mins) and mins > 0 else "0m 0s"
     )
 
+    grouped["True DPH"] = (
+        grouped["Total_Pins"] / grouped["Field Time Less Inspections (Hours)"]
+    ).replace([np.inf, -np.inf], np.nan).round(2)
+
+    grouped["True DPH (Formatted)"] = grouped["True DPH"].apply(
+        lambda dph: f"{dph} DPH" if pd.notnull(dph) else "N/A"
+    )
+
     return grouped
     
 def prep_for_output(df):
