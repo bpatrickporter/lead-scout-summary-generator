@@ -78,6 +78,19 @@ def process_data(df):
     df["Time Since Last Pin (s)"] = df["Time Since Last Pin"].dt.total_seconds()
 
     df["Is Inspection"] = df["Lead Status"].str.contains("Inspected", case=False, na=False).astype(int)
+    df["Previous Is Inspection"] = df.groupby("Lead Status Updated By")["Is Inspection"].shift(1)
+    df["Inspection Gap (s)"] = df.apply(
+        lambda row: row["Time Since Last Pin (s)"]
+        if pd.notnull(row["Time Since Last Pin (s)"]) and row["Previous Is Inspection"] == 1
+        else 0,
+        axis=1
+    )
+    inspection_gaps = (
+        df.groupby(["Lead Status Updated By", "Date"])["Inspection Gap (s)"]
+        .sum()
+        .reset_index()
+        .rename(columns={"Inspection Gap (s)": "Inspection Time (s)"})
+    )
     df["<30s Pin"] = df["Time Since Last Pin"].dt.total_seconds().lt(30).fillna(False).astype(int)
     df[">5m Non-Inspection"] = (
         df["Time Since Last Pin"].dt.total_seconds().gt(300) & (df["Is Inspection"] == 0)
@@ -128,6 +141,13 @@ def process_data(df):
         grouped["Claims_Filed"] / grouped["Insp_Damage"]
     ).replace([np.inf, -np.inf], np.nan).round(2)
 
+    grouped = pd.merge(grouped, inspection_gaps, on=["Lead Status Updated By", "Date"], how="left")
+
+    # Format to "xh ym"
+    grouped["Inspection Time"] = grouped["Inspection Time (s)"].apply(
+        lambda s: f"{int(s // 3600)}h {int((s % 3600) // 60)}m" if pd.notnull(s) and s > 0 else "0h 0m"
+    )
+
     # Sunset time and "Before Sunset"
     grouped["Sunset Time"] = grouped["Date"].apply(lambda d: get_sunset_time(d.strftime('%Y-%m-%d')))
     grouped["Finish"] = grouped["Finish"].dt.tz_localize(None)
@@ -146,8 +166,7 @@ def process_data(df):
 
     # Placeholder columns
     for col in [
-        "Adj Time in Field", "Inspection Time", "Field Time Less Inspections",
-        "True AVG Time/Door", "True DPH", "Position", "Note"
+        "Field Time Less Inspections", "True AVG Time/Door", "True DPH", "Position", "Note"
     ]:
         grouped[col] = "TBD"
 
