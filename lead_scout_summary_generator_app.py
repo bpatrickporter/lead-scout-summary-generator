@@ -166,7 +166,7 @@ def process_data(df):
 
     # Placeholder columns
     for col in [
-        "True AVG Time/Door", "True DPH", "Position", "Note"
+        "True DPH", "Position", "Note"
     ]:
         grouped[col] = "TBD"
 
@@ -184,6 +184,15 @@ def process_data(df):
     grouped["Field Time Less Inspections (Hours)"] = grouped["Adj Time in Field (Hours)"] - (grouped["Inspection Time (s)"] / 3600)
     grouped["Field Time Less Inspections"] = grouped["Field Time Less Inspections (Hours)"].apply(
         lambda hrs: f"{int(hrs)}h {int(round((hrs % 1) * 60))}m" if pd.notnull(hrs) and hrs > 0 else "0h 0m"
+    )
+
+    grouped["True AVG Time/Door"] = (
+        (grouped["Field Time Less Inspections (Hours)"] * 60) / grouped["Total_Pins"]
+    ).replace([np.inf, -np.inf], np.nan)
+
+    grouped["True AVG Time/Door"] = grouped["True AVG Time/Door"].apply(
+        lambda mins: f"{int(mins)}m {int(round((mins % 1) * 60))}s"
+        if pd.notnull(mins) and mins > 0 else "0m 0s"
     )
 
     return grouped
