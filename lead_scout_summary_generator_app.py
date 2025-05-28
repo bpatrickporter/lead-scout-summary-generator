@@ -7,6 +7,9 @@ import pytz
 import plotly.express as px
 from geopy.geocoders import ArcGIS
 from geopy.extra.rate_limiter import RateLimiter
+from collections import defaultdict
+
+gap_notes = defaultdict(list)
 
 def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     url = f"https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}&date={date_str}&formatted=0"
@@ -16,16 +19,35 @@ def get_sunset_time(date_str, lat=39.8436, lon=-86.1190):
     eastern = pytz.timezone("America/Indiana/Indianapolis")
     return utc_time.astimezone(eastern)
 
-def classify_gap(row):
+def combine_notes(row):
+    key = (row["Lead Status Updated By"], row["Date"])
+    notes = gap_notes.get(key, [])
+    return "\n".join(notes) if notes else ""
+
+def classify_gap_and_note(row):
     gap = row["Time Since Last Pin (s)"]
-    is_inspection = row["Is Inspection"]
     if pd.isnull(gap):
         return 0
-    if gap > 7200:  # > 120 mins
-        return gap
-    elif gap > 1800 and not is_inspection:  # > 30 mins & not inspection
-        return gap
-    return 0
+
+    first_addr = row.get("Previous Address", "Unknown")
+    second_addr = row.get("Address1", "Unknown")
+    rep = row["Lead Status Updated By"]
+    date = row["Lead Status Updated At"].date()
+
+    if gap > 7200:
+        reason = "Rule 2: >120 min"
+    elif gap > 1800 and row["Is Inspection"] == 0:
+        reason = "Rule 1: >30 min, not inspection"
+    else:
+        return 0
+
+    hrs = int(gap // 3600)
+    mins = int((gap % 3600) // 60)
+    time_str = f"{hrs}h {mins}m" if hrs else f"{mins}m"
+    note = f"Removed {time_str} gap between '{first_addr}' and '{second_addr}' ({reason})"
+    gap_notes[(rep, date)].append(note)
+
+    return gap
 
 def process_data(df):
     # Ensure correct types and clean values
@@ -38,15 +60,6 @@ def process_data(df):
     df["Date"] = df["Lead Status Updated At"].dt.date
     df = df.sort_values(by=["Lead Status Updated By", "Lead Status Updated At"]).reset_index(drop=True)
 
-    # Time deltas
-    df["Previous Time"] = df.groupby("Lead Status Updated By")["Lead Status Updated At"].shift(1)
-    df["Time Since Last Pin"] = df["Lead Status Updated At"] - df["Previous Time"]
-    # Create helper column: time gaps in seconds
-    df["Time Since Last Pin (s)"] = df["Time Since Last Pin"].dt.total_seconds()
-    df["Long Gaps (s)"] = df.apply(classify_gap, axis=1)
-    long_gaps = df.groupby(["Lead Status Updated By", "Date"])["Long Gaps (s)"].sum().reset_index()
-    long_gaps.rename(columns={"Long Gaps (s)": "Total Long Gaps (s)"}, inplace=True)
-
     # Classification
     df["Is Conversation"] = df.apply(lambda row: int(
         row["Lead Status Lower"] in [
@@ -58,11 +71,22 @@ def process_data(df):
         )
     ), axis=1)
 
+    # Time deltas
+    df["Previous Time"] = df.groupby("Lead Status Updated By")["Lead Status Updated At"].shift(1)
+    df["Time Since Last Pin"] = df["Lead Status Updated At"] - df["Previous Time"]
+    # Create helper column: time gaps in seconds
+    df["Time Since Last Pin (s)"] = df["Time Since Last Pin"].dt.total_seconds()
+
     df["Is Inspection"] = df["Lead Status"].str.contains("Inspected", case=False, na=False).astype(int)
     df["<30s Pin"] = df["Time Since Last Pin"].dt.total_seconds().lt(30).fillna(False).astype(int)
     df[">5m Non-Inspection"] = (
         df["Time Since Last Pin"].dt.total_seconds().gt(300) & (df["Is Inspection"] == 0)
     ).fillna(False).astype(int)
+
+    df["Previous Address"] = df.groupby("Lead Status Updated By")["Address1"].shift(1)
+    df["Long Gaps (s)"] = df.apply(classify_gap_and_note, axis=1)
+    long_gaps = df.groupby(["Lead Status Updated By", "Date"])["Long Gaps (s)"].sum().reset_index()
+    long_gaps.rename(columns={"Long Gaps (s)": "Total Long Gaps (s)"}, inplace=True)
 
     df["Is Inspection Scheduled"] = (df["Lead Status Lower"] == "inspection scheduled").astype(int)
     df["Is Inspected - No Damage"] = (df["Lead Status"] == "Inspected - No Damage").astype(int)
@@ -129,6 +153,7 @@ def process_data(df):
 
     # Merge with grouped data
     grouped = pd.merge(grouped, long_gaps, on=["Lead Status Updated By", "Date"], how="left")
+    grouped["Note"] = grouped.apply(combine_notes, axis=1)
     # Calculate Adjusted Time in Field (raw timedelta)
     grouped["Adj Time in Field (Hours)"] = (grouped["Finish"] - grouped["Start"]) - pd.to_timedelta(grouped["Total Long Gaps (s)"], unit="s")
     # Format as hh:mm string

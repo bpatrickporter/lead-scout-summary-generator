@@ -6,3 +6,4 @@ datetime
 pytz
 plotly.express
 geopy
+collections
