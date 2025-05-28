@@ -166,21 +166,26 @@ def process_data(df):
 
     # Placeholder columns
     for col in [
-        "Field Time Less Inspections", "True AVG Time/Door", "True DPH", "Position", "Note"
+        "True AVG Time/Door", "True DPH", "Position", "Note"
     ]:
         grouped[col] = "TBD"
 
     # Merge with grouped data
     grouped = pd.merge(grouped, long_gaps, on=["Lead Status Updated By", "Date"], how="left")
     grouped["Note"] = grouped.apply(combine_notes, axis=1)
+
     # Calculate Adjusted Time in Field (raw timedelta)
-    grouped["Adj Time in Field (Hours)"] = (grouped["Finish"] - grouped["Start"]) - pd.to_timedelta(grouped["Total Long Gaps (s)"], unit="s")
-    # Format as hh:mm string
-    grouped["Adj Time in Field"] = grouped["Adj Time in Field (Hours)"].apply(
+    grouped["Adj Time in Field (Timedelta)"] = ((grouped["Finish"] - grouped["Start"]) - pd.to_timedelta(grouped["Total Long Gaps (s)"], unit="s"))
+    grouped["Adj Time in Field (Hours)"] = grouped["Adj Time in Field (Timedelta)"].dt.total_seconds() / 3600
+    grouped["Adj Time in Field"] = grouped["Adj Time in Field (Timedelta)"].apply(
         lambda td: f"{int(td.total_seconds() // 3600)}h {int((td.total_seconds() % 3600) // 60)}m"
-        if pd.notnull(td) and td > timedelta(0) else "0h 0m"
+        if pd.notnull(td) and td.total_seconds() > 0 else "0h 0m"
     )
-    
+    grouped["Field Time Less Inspections (Hours)"] = grouped["Adj Time in Field (Hours)"] - (grouped["Inspection Time (s)"] / 3600)
+    grouped["Field Time Less Inspections"] = grouped["Field Time Less Inspections (Hours)"].apply(
+        lambda hrs: f"{int(hrs)}h {int(round((hrs % 1) * 60))}m" if pd.notnull(hrs) and hrs > 0 else "0h 0m"
+    )
+
     return grouped
     
 def prep_for_output(df):
