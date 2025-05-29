@@ -186,11 +186,11 @@ def process_data(df):
         lambda hrs: f"{int(hrs)}h {int(round((hrs % 1) * 60))}m" if pd.notnull(hrs) and hrs > 0 else "0h 0m"
     )
 
-    grouped["True AVG Time/Door"] = (
+    grouped["True AVG Time/Door (Min)"] = (
         (grouped["Field Time Less Inspections (Hours)"] * 60) / grouped["Total_Pins"]
     ).replace([np.inf, -np.inf], np.nan)
 
-    grouped["True AVG Time/Door"] = grouped["True AVG Time/Door"].apply(
+    grouped["True AVG Time/Door"] = grouped["True AVG Time/Door (Min)"].apply(
         lambda mins: f"{int(mins)}m {int(round((mins % 1) * 60))}s"
         if pd.notnull(mins) and mins > 0 else "0m 0s"
     )
@@ -205,7 +205,7 @@ def process_data(df):
 
     return grouped
     
-def prep_for_output(df):
+def prep_for_table(df):
     # Output formatting and export
     output = df.rename(columns={
         "Total_Pins": "Knocks",
@@ -225,6 +225,28 @@ def prep_for_output(df):
         "True AVG Time/Door", "True DPH", "< 30s", "> 5m No Inspection", 
         "Position", "Note"
     ]]
+    return output.set_index("Lead Status Updated By")
+
+def prep_for_dashboards(df):
+    # Output formatting and export
+    output = df.rename(columns={
+        "Total_Pins": "Knocks",
+        "Conversations": "Convos",
+        "Pins_Lt_30s": "< 30s",
+        "Pins_Gt_5m_NonInsp": "> 5m No Inspection",
+        "Insp_Scheduled": "Inpsections Scheduled",
+        "Insp_Damage": "Inspected - Damaged",
+        "Insp_No_Damage": "Inspected - No Damage",
+        "Claims_Filed": "Claims Filed"
+    })[[
+        "Lead Status Updated By", "Date", "Start", "Finish", "Time in Field",
+        "Adj Time in Field", "Sunset Time", "Before Sunset", 
+        "Knocks", "Convos", "Convo %", "Inspections", "Inspected - No Damage", 
+        "Inspected - Damaged", "Claims Filed", "Closing %", "Inspections/Door", 
+        "Inspections/Convo", "Inspection Time", "DPH", "Field Time Less Inspections", 
+        "True AVG Time/Door (Min)", "True DPH", "< 30s", "> 5m No Inspection", 
+        "Position", "Note"
+    ]]
     return output
 
 def generate_dashboards(df):
@@ -237,7 +259,7 @@ def generate_dashboards(df):
         ("Closing %", "Closing %"),
         ("Inspections/Door", "Inspections/Door"),
         ("Inspections/Convo", "Inspections/Convo"),
-        ("True AVG Time/Door", "True AVG Time/Door"),
+        ("True AVG Time/Door (Min)", "True AVG Time/Door (Min)"),
         ("True DPH", "True DPH"),
     ]
 
@@ -313,7 +335,6 @@ def compute_map_df(df, selected_rep):
 
     return rep_df[rep_df["Latitude"].notnull() & rep_df["Longitude"].notnull()]
 
-
 def plot_knock_map(df):
     if "Latitude" in df.columns and "Longitude" in df.columns:
         st.subheader("🗺️ Knock Map by Rep")
@@ -333,27 +354,33 @@ def plot_knock_map(df):
     else:
         st.warning("📍 Latitude and Longitude not found in uploaded file.")
 
-st.set_page_config(layout="wide")
+def main():
+    st.set_page_config(layout="wide")
 
-st.title("📊 Lead Scout Summary Generator")
+    st.title("📊 Lead Scout Summary Generator")
 
-# Upload or load CSV file
-csv_file = st.file_uploader("Upload your scouting report here", type=["csv"])
+    # Upload or load CSV file
+    csv_file = st.file_uploader("Upload your scouting report here", type=["csv"])
 
-if csv_file is not None:
-    df = pd.read_csv(csv_file)
-    st.success("✅ File loaded successfully!")
+    if csv_file is not None:
+        
+        # Read CSV and process data
+        raw_df = pd.read_csv(csv_file)
+        st.success("✅ File loaded successfully!")
+        processed_df = process_data(raw_df)
 
-    processed_df = process_data(df)
-    output_df = prep_for_output(processed_df)
-    output_indexed = output_df.set_index("Lead Status Updated By")
+        # Display table
+        st.write("Your Lead Scout Summary:")
+        st.dataframe(prep_for_table(processed_df))  # Interactive table view
 
-    st.write("Your Lead Scout Summary:")
-    st.dataframe(output_indexed)  # Interactive table view
+        # Display dashboards
+        generate_dashboards(prep_for_dashboards(processed_df))
 
-    generate_dashboards(output_df)
+        # Display map
+        generate_map(raw_df)
 
-    generate_map(df)
+    else:
+        st.info("👆 Upload a CSV file to get started.")
 
-else:
-    st.info("👆 Upload a CSV file to get started.")
+if __name__ == "__main__":
+    main()
