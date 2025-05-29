@@ -49,6 +49,31 @@ def classify_gap_and_note(row):
 
     return gap
 
+def highlight_time_since_last_pin(col):
+    def parse_time(s):
+        try:
+            mins, secs = map(int, s.replace("m", "").replace("s", "").split())
+            return mins * 60 + secs
+        except:
+            return None
+
+    styles = []
+    for value in col:
+        total_seconds = parse_time(value)
+        if total_seconds is None:
+            styles.append("")
+        elif total_seconds == 0:
+            styles.append("background-color: black; color: transparent")
+        elif 1 <= total_seconds <= 30:
+            styles.append("background-color: #f8d7da")  # Light red
+        elif 900 <= total_seconds <= 1800:  # 15–30 min
+            styles.append("background-color: #ffe5b4")  # Light orange
+        elif total_seconds > 1800:  # > 30 min
+            styles.append("background-color: #fff3cd")  # Light yellow
+        else:
+            styles.append("")
+    return styles
+
 def process_data(df):
     # Ensure correct types and clean values
     df["Lead Status Updated At"] = pd.to_datetime(df["Lead Status Updated At"], errors="coerce")
@@ -278,10 +303,10 @@ def prep_for_knock_details(raw_df):
         "Lead Status Updated At", "Proximity (meters)", "Tags", "Notes"
     ]
 
-    # Set index to "Full Address"
-    df_final = df[ordered_columns].set_index("Full Address")
+    df_final = df[ordered_columns].copy()
 
-    return df_final
+    # Apply styling directly (index is default and safe)
+    return df_final.style.apply(highlight_time_since_last_pin, subset=["Time Since Last Pin"])
 
 def generate_dashboards(df):
     chart_specs = [
