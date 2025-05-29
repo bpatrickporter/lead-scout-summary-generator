@@ -264,17 +264,17 @@ def prep_for_knock_details(raw_df):
     df["Previous Time"] = df.groupby("Lead Status Updated By")["Lead Status Updated At"].shift(1)
     df["Time Since Last Pin"] = df["Lead Status Updated At"] - df["Previous Time"]
 
-    # Format time delta as "xh ym"
+    # Format time delta as "xm ys"
     df["Time Since Last Pin"] = df["Time Since Last Pin"].apply(
         lambda td: (
-            f"{int(td.total_seconds() // 3600)}h {int((td.total_seconds() % 3600) // 60)}m"
-            if pd.notnull(td) and td.total_seconds() > 0 else "0h 0m"
+            f"{int(td.total_seconds() // 60)}m {int(td.total_seconds() % 60)}s"
+            if pd.notnull(td) and td.total_seconds() > 0 else "0m 0s"
         )
     )
 
     # Final column order
     ordered_columns = [
-        "Full Address", "Lead Status", "Time Since Last Pin", "Lead Status Updated By",
+        "Full Address", "Lead Status", "Time Since Last Pin","Lead Status Updated By",
         "Lead Status Updated At", "Proximity (meters)", "Tags", "Notes"
     ]
 
