@@ -249,6 +249,40 @@ def prep_for_dashboards(df):
     ]]
     return output
 
+def prep_for_knock_details(raw_df):
+    # Work on a copy of the raw data
+    df = raw_df.copy()
+
+    # Ensure proper types
+    df["Lead Status Updated At"] = pd.to_datetime(df["Lead Status Updated At"], errors="coerce")
+    df = df[df["Lead Status Updated At"].notnull()].copy()
+
+    # Sort by rep and timestamp
+    df = df.sort_values(by=["Lead Status Updated By", "Lead Status Updated At"]).reset_index(drop=True)
+
+    # Compute time since last pin
+    df["Previous Time"] = df.groupby("Lead Status Updated By")["Lead Status Updated At"].shift(1)
+    df["Time Since Last Pin"] = df["Lead Status Updated At"] - df["Previous Time"]
+
+    # Format time delta as "xh ym"
+    df["Time Since Last Pin"] = df["Time Since Last Pin"].apply(
+        lambda td: (
+            f"{int(td.total_seconds() // 3600)}h {int((td.total_seconds() % 3600) // 60)}m"
+            if pd.notnull(td) and td.total_seconds() > 0 else "0h 0m"
+        )
+    )
+
+    # Final column order
+    ordered_columns = [
+        "Full Address", "Lead Status", "Time Since Last Pin", "Lead Status Updated By",
+        "Lead Status Updated At", "Proximity (meters)", "Tags", "Notes"
+    ]
+
+    # Set index to "Full Address"
+    df_final = df[ordered_columns].set_index("Full Address")
+
+    return df_final
+
 def generate_dashboards(df):
     chart_specs = [
         ("Knocks", "Knocks"),
@@ -375,6 +409,10 @@ def main():
 
         # Display dashboards
         generate_dashboards(prep_for_dashboards(processed_df))
+
+        # Display og data table
+        st.write("Knock Details")
+        st.dataframe(prep_for_knock_details(raw_df))
 
         # Display map
         generate_map(raw_df)
