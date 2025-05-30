@@ -155,6 +155,9 @@ def process_data(df):
     )
 
     grouped["Convo %"] = (grouped["Conversations"] / grouped["Total_Pins"]).round(2)
+    grouped["Convo %"] = grouped["Convo %"].apply(
+        lambda x: f"{round(x * 100)}%" if pd.notnull(x) else "0%"
+    )
     grouped["Inspections/Door"] = (grouped["Inspections"] / grouped["Total_Pins"]).round(2)
     grouped["Inspections/Convo"] = (
         grouped["Inspections"] / grouped["Conversations"]
@@ -165,6 +168,9 @@ def process_data(df):
     grouped["Closing %"] = (
         grouped["Claims_Filed"] / grouped["Insp_Damage"]
     ).replace([np.inf, -np.inf], np.nan).round(2)
+    grouped["Closing %"] = grouped["Closing %"].apply(
+        lambda x: f"{round(x * 100)}%" if pd.notnull(x) else "0%"
+    )
 
     grouped = pd.merge(grouped, inspection_gaps, on=["Lead Status Updated By", "Date"], how="left")
 
@@ -275,21 +281,15 @@ def prep_for_dashboards(df):
     return output
 
 def prep_for_knock_details(raw_df):
-    # Work on a copy of the raw data
-    df = raw_df.copy()
 
-    # Ensure proper types
+    df = raw_df.copy()
     df["Lead Status Updated At"] = pd.to_datetime(df["Lead Status Updated At"], errors="coerce")
     df = df[df["Lead Status Updated At"].notnull()].copy()
 
-    # Sort by rep and timestamp
     df = df.sort_values(by=["Lead Status Updated By", "Lead Status Updated At"]).reset_index(drop=True)
-
-    # Compute time since last pin
     df["Previous Time"] = df.groupby("Lead Status Updated By")["Lead Status Updated At"].shift(1)
     df["Time Since Last Pin"] = df["Lead Status Updated At"] - df["Previous Time"]
 
-    # Format time delta as "xm ys"
     df["Time Since Last Pin"] = df["Time Since Last Pin"].apply(
         lambda td: (
             f"{int(td.total_seconds() // 60)}m {int(td.total_seconds() % 60)}s"
@@ -297,16 +297,22 @@ def prep_for_knock_details(raw_df):
         )
     )
 
-    # Final column order
+    # Column ordering
     ordered_columns = [
-        "Full Address", "Lead Status", "Time Since Last Pin","Lead Status Updated By",
+        "Full Address", "Lead Status", "Time Since Last Pin", "Lead Status Updated By",
         "Lead Status Updated At", "Proximity (meters)", "Tags", "Notes"
     ]
+    df = df[ordered_columns]
 
-    df_final = df[ordered_columns].copy()
+    rep_list = df["Lead Status Updated By"].dropna().unique().tolist()
+    selected_rep = st.selectbox("Filter by Rep", ["All"] + rep_list)
 
-    # Apply styling directly (index is default and safe)
-    return df_final.style.apply(highlight_time_since_last_pin, subset=["Time Since Last Pin"])
+    if selected_rep != "All":
+        df = df[df["Lead Status Updated By"] == selected_rep]
+
+    # Display using data_editor (not stylized, but interactive)
+    return df
+
 
 def generate_dashboards(df):
     chart_specs = [
@@ -429,17 +435,18 @@ def main():
         processed_df = process_data(raw_df)
 
         # Display table
-        st.write("Your Lead Scout Summary:")
+        st.subheader("📋 Your Lead Scout Summary:")
         st.dataframe(prep_for_table(processed_df))  # Interactive table view
 
         # Display dashboards
         generate_dashboards(prep_for_dashboards(processed_df))
 
         # Display og data table
-        st.write("Knock Details")
-        st.dataframe(prep_for_knock_details(raw_df))
+        st.subheader("🚪 Knock Details")
+        st.data_editor(prep_for_knock_details(raw_df), use_container_width=True, hide_index=True)
 
         # Display map
+        st.subheader("📍 Map My Pins")
         generate_map(raw_df)
 
     else:
