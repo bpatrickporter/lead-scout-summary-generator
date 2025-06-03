@@ -155,6 +155,9 @@ def process_data(df):
     )
 
     grouped["Convo %"] = (grouped["Conversations"] / grouped["Total_Pins"]).round(2)
+    grouped["Convo %"] = grouped["Convo %"].apply(
+        lambda x: f"{round(x * 100)}%" if pd.notnull(x) else "0%"
+    )
     grouped["Inspections/Door"] = (grouped["Inspections"] / grouped["Total_Pins"]).round(2)
     grouped["Inspections/Convo"] = (
         grouped["Inspections"] / grouped["Conversations"]
@@ -165,6 +168,9 @@ def process_data(df):
     grouped["Closing %"] = (
         grouped["Claims_Filed"] / grouped["Insp_Damage"]
     ).replace([np.inf, -np.inf], np.nan).round(2)
+    grouped["Closing %"] = grouped["Closing %"].apply(
+        lambda x: f"{round(x * 100)}%" if pd.notnull(x) else "0%"
+    )
 
     grouped = pd.merge(grouped, inspection_gaps, on=["Lead Status Updated By", "Date"], how="left")
 
