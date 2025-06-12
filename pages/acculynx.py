@@ -10,11 +10,13 @@ from geopy.geocoders import ArcGIS
 from geopy.extra.rate_limiter import RateLimiter
 from collections import defaultdict
 
-def read_csv(csv_file):
-    df = pd.read_csv(csv_file, usecols=[
+NEEDED_COLUMNS = [
         'Lead Date', 'Prospect Date', 'Approved Date', 'Current Status',
         'Current Milestone', 'Current Milestone Date', 'Job Value'
-    ])
+    ]
+
+def read_csv(csv_file):
+    df = pd.read_csv(csv_file, usecols=NEEDED_COLUMNS)
     return df
 
 def process_data(df):
@@ -123,7 +125,12 @@ def main():
         st.dataframe(processed_df)  # Interactive table view
 
     else:
-        st.info("👆 Upload a CSV file to get started.")
+        seperator = ", "
+        st.info(f"""
+        👆 Upload a CSV file to get started.
+        The following columns are required:
+        {seperator.join(NEEDED_COLUMNS)}
+        """)
 
 if __name__ == "__main__":
     main()
