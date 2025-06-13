@@ -420,10 +420,6 @@ def plot_knock_map(df):
         st.warning("📍 Latitude and Longitude not found in uploaded file.")
 
 def main():
-    st.set_page_config(layout="wide")
-
-    st.title("📊 Lead Scout Summary Generator")
-
     # Upload or load CSV file
     csv_file = st.file_uploader("Upload your scouting report here", type=["csv"])
 

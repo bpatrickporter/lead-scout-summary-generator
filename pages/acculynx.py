@@ -106,10 +106,6 @@ def format_currency(df):
     return df
 
 def main():
-    st.set_page_config(layout="wide")
-
-    st.title("📊 Acculynx Summary Generator")
-
     # Upload or load CSV file
     csv_file = st.file_uploader("Upload your Acculynx lead progress report here", type=["csv"])
 
