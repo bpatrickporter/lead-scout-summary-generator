@@ -7,6 +7,7 @@ NEEDED_COLUMNS = [
         'Lead Date', 'Prospect Date', 'Approved Date', 'Current Status',
         'Current Milestone', 'Current Milestone Date', 'Job Value'
     ]
+ALL_DATA_REPORT_ID = "3b8cd0b2-d285-434f-b5ea-73d037f92c10"
 
 def prepare_raw_data(df):
     covert_dates_to_datetime(df)
@@ -95,6 +96,10 @@ def format_currency(df):
     df['Approved Job Value Sum'] = df['Approved Job Value Sum'].apply(lambda x: locale.currency(x, grouping=True))
 
 def main():
+    # Utilize the AccuLynx API to fetch the latest report data
+    # api = AccuLynxAPI(api_key="YOUR_API_KEY")
+    # latest_report = api.get_latest_report(report_id=ALL_DATA_REPORT_ID)
+
     raw_df = pd.read_csv('data/acculynx_leads.csv', usecols=NEEDED_COLUMNS)
     prepare_raw_data(raw_df)
     processed_df = process_data(raw_df)
