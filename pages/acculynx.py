@@ -14,16 +14,13 @@ NEEDED_COLUMNS = [
         'Lead Date', 'Prospect Date', 'Approved Date', 'Current Status',
         'Current Milestone', 'Current Milestone Date', 'Job Value'
     ]
-
-def read_csv(csv_file):
-    df = pd.read_csv(csv_file, usecols=NEEDED_COLUMNS)
-    return df
+def prepare_raw_data(df):
+    covert_dates_to_datetime(df)
+    add_start_of_week_columns(df)
 
 def process_data(df):
-    df = covert_dates_to_datetime(df)
-    df = add_start_of_week_columns(df)
     result = get_unique_weeks(df)
-    result = add_job_counts(result, df)
+    add_job_counts(result, df)
     result['Week'] = pd.to_datetime(result['Week'])
     result = add_weekly_job_values(result, df)
     result = format_currency(result)
@@ -36,14 +33,12 @@ def covert_dates_to_datetime(df):
     df['Prospect Date'] = pd.to_datetime(df['Prospect Date'], format="%m/%d/%y", errors='coerce')
     df['Approved Date'] = pd.to_datetime(df['Approved Date'], format="%m/%d/%y", errors='coerce')
     df['Current Milestone Date'] = pd.to_datetime(df['Current Milestone Date'], format="%m/%d/%y", errors='coerce')
-    return df
     
 def add_start_of_week_columns(df):
     df['Lead Week'] = df['Lead Date'] - pd.to_timedelta(df['Lead Date'].dt.weekday, unit='D')
     df['Prospect Week'] = df['Prospect Date'] - pd.to_timedelta(df['Prospect Date'].dt.weekday, unit='D')
     df['Approved Week'] = df['Approved Date'] - pd.to_timedelta(df['Approved Date'].dt.weekday, unit='D')
     df['Current Milestone Week'] = df['Current Milestone Date'] - pd.to_timedelta(df['Current Milestone Date'].dt.weekday, unit='D')
-    return df
 
 def get_unique_weeks(df):
     result = pd.DataFrame()
@@ -106,27 +101,13 @@ def format_currency(df):
     return df
 
 def main():
-    # Upload or load CSV file
-    csv_file = st.file_uploader("Upload your Acculynx lead progress report here", type=["csv"])
+    raw_df = pd.read_csv('data/acculynx_leads.csv', usecols=NEEDED_COLUMNS)
+    prepare_raw_data(raw_df)
+    processed_df = process_data(raw_df)
 
-    if csv_file is not None:
-        
-        # Read CSV and process data
-        raw_df = read_csv(csv_file)
-        st.success("✅ File loaded successfully!")
-        processed_df = process_data(raw_df)
-
-        # Display table
-        st.write("Your Acculynx Lead Summary:")
-        st.dataframe(processed_df)  # Interactive table view
-
-    else:
-        seperator = ", "
-        st.info(f"""
-        👆 Upload a CSV file to get started.
-        The following columns are required:
-        {seperator.join(NEEDED_COLUMNS)}
-        """)
+    st.title("🐆 Acculynx Lead Summary")
+    st.write("Your Acculynx Lead Summary:")
+    st.dataframe(processed_df)  # Interactive table view
 
 if __name__ == "__main__":
     main()
