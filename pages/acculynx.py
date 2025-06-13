@@ -1,14 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
 import locale
-from datetime import datetime, timedelta
-import pytz
-import plotly.express as px
-from geopy.geocoders import ArcGIS
-from geopy.extra.rate_limiter import RateLimiter
-from collections import defaultdict
 
 NEEDED_COLUMNS = [
         'Lead Date', 'Prospect Date', 'Approved Date', 'Current Status',
