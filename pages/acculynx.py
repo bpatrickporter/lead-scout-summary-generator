@@ -14,6 +14,7 @@ NEEDED_COLUMNS = [
         'Lead Date', 'Prospect Date', 'Approved Date', 'Current Status',
         'Current Milestone', 'Current Milestone Date', 'Job Value'
     ]
+
 def prepare_raw_data(df):
     covert_dates_to_datetime(df)
     add_start_of_week_columns(df)
@@ -21,9 +22,7 @@ def prepare_raw_data(df):
 def process_data(df):
     result = get_unique_weeks(df)
     add_job_counts(result, df)
-    result['Week'] = pd.to_datetime(result['Week'])
     result = add_weekly_job_values(result, df)
-    result = format_currency(result)
     result['Week'] = result['Week'].dt.date
     result.set_index('Week', inplace=True)
     return result
@@ -52,6 +51,7 @@ def get_unique_weeks(df):
 
     # Create a new DataFrame with the unique weeks
     final_result = pd.DataFrame(unique_weeks, columns=['Week'])
+    final_result['Week'] = pd.to_datetime(final_result['Week'])
 
     # Sort the final result
     final_result = final_result.sort_values(by='Week')
@@ -82,23 +82,24 @@ def add_job_counts(result, df):
     return result
 
 def add_weekly_job_values(result, df):
-    # 1. Calculate the weekly sum of Job Value for approved jobs
+    # Calculate the weekly sum of Job Value for approved jobs
     approved_jobs = df[df['Approved Date'].notna()]  # Filter for approved jobs
     weekly_job_value_sum = approved_jobs.groupby('Approved Week')['Job Value'].sum().reset_index()  # Group by Approved Week and sum
     weekly_job_value_sum.rename(columns={'Job Value': 'Approved Job Value Sum'}, inplace=True)  # Rename column
 
-    # 2. Merge with the result dataframe
+    # Merge with the result dataframe
     result = pd.merge(result, weekly_job_value_sum, left_on='Week', right_on='Approved Week', how='left')  # Merge
     result['Approved Job Value Sum'] = result['Approved Job Value Sum'].fillna(0)  # Fill NaN with 0
 
     # Remove the 'Approved Week' column if desired (it's redundant after the merge)
     result.drop('Approved Week', axis=1, inplace=True)
+
+    format_currency(result)
     return result 
 
 def format_currency(df):
     locale.setlocale(locale.LC_ALL, 'en_US.UTF-8') 
     df['Approved Job Value Sum'] = df['Approved Job Value Sum'].apply(lambda x: locale.currency(x, grouping=True))
-    return df
 
 def main():
     raw_df = pd.read_csv('data/acculynx_leads.csv', usecols=NEEDED_COLUMNS)
