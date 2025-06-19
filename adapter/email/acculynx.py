@@ -1,5 +1,3 @@
-# This file is an adapter to gather reports in csv files from email attachments. 
-# Each morning a report is sent to the user, and this adapter processes that report.
 import imaplib
 from dotenv import load_dotenv
 import os
@@ -10,7 +8,7 @@ class AccuLynxEmailAdapter:
     def __init__(self):
         self.email_user = os.getenv('email-username')
         self.email_password = os.getenv('email-password')
-        self.imap_server = "imap-mail.outlook.com"  # Replace with actual IMAP server
+        self.imap_server = "imap-mail.outlook.com"
         self.mail = None
         
     def connect(self):
